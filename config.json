@@ -1,0 +1,17 @@
+{
+  "mic_array_config": {
+    "frequency": 100.0,
+    "speed_of_sound": 343.0,
+    "N": 4
+  },
+  "sound_propagation_config": {
+    "source_position": [0.0, 0.0, 1.0],
+    "source_amplitude": 1.0,
+    "frequency": 1000.0,
+    "speed_of_sound": 343.0,
+    "temperature": 20.0,
+    "humidity": 50.0,
+    "atmospheric_pressure": 101325.0,
+    "attenuation_enabled": true
+  }
+}
