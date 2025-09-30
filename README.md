@@ -1,12 +1,18 @@
-<h1> Multi-source sound source locaizations</h1>
+# Multi-source Sound Source Localization
 
-<p> We are using a microphone array with equal spacing between each microphone, along the cardinal diractions, relativaly. Using time delay to determine the angle of arrival along both axiis on the array to determine direction in a 3d space, row-wise time delay gives us the azimuth direction and collumn-wise time delay gives us elevation.<br  /> Microphone spacing is not a static value and needs to be determined using: <br \></p>
+We are using a microphone array with equal spacing between each microphone along the cardinal directions. Using time delay to determine the angle of arrival along both axes on the array to determine direction in 3D space:
+- **Row-wise time delay** gives us the **azimuth** direction
+- **Column-wise time delay** gives us the **elevation**
 
- $ \frac{\lamda}{2} $ 
+Microphone spacing is not a static value and needs to be determined using:
 
-<p> This is a Niquist rule to avoid spacial alaising each microphone will us: <br  \></p>
+$$\frac{\lambda}{2}$$
 
- $ x[n] exp(2j\pi dk \sin(\theta)) $
- 
-<p> Where d is the distance between microphone, and k represent the the position of the element in the array<br  \></p>
+This is the Nyquist rule to avoid spatial aliasing. Each microphone uses:
 
+$$x[n] \exp(-2j\pi d k \sin(\theta))$$
+
+Where:
+- $d$ is the distance between microphones
+- $k$ represents the position of the element in the array
+- $\theta$ is the angle of arrival
