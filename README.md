@@ -22,8 +22,8 @@ Where:
 
 
 ## Do not run test_example.py at this time!!
-    The test uses a function that has been commented out of the time being. To see any details run 
+The test uses a function that has been commented out of the time being. To see any details run 
 
-'''python mic_array_plot.py'''
+    python mic_array_plot.py
 
-    and refer to the pictures in Pictures for plots generated.
+and refer to the pictures in Pictures for plots generated.
