@@ -561,6 +561,107 @@ if __name__ == "__main__":
     print(f"  X-axis: {np.degrees(aoa_x_calculated - theoretical_angle_x):.2f} degrees")
     print(f"  Y-axis: {np.degrees(aoa_y_calculated - theoretical_angle_y):.2f} degrees")
 
+    # Plot unit vectors from each mic toward source
+    print("\nGenerating visualization of source direction vectors...")
+    fig_vectors, (ax_array, ax_overview) = plt.subplots(1, 2, figsize=(18, 8))
+
+    # LEFT SUBPLOT: Array closeup with unit vectors
+    # Plot microphones
+    ax_array.scatter(pos1[:, 0], pos1[:, 1],
+                     s=200, c='blue', marker='o', edgecolors='black', linewidth=2,
+                     label='Microphones', zorder=3)
+
+    # Calculate unit vectors from each mic toward source
+    # Direction from mic to source (in x-y plane projection)
+    for i, mic_pos in enumerate(pos1):
+        # Vector from mic to source (2D projection)
+        direction_vector = np.array([source_pos[0] - mic_pos[0],
+                                     source_pos[1] - mic_pos[1]])
+
+        # Normalize to unit vector
+        direction_magnitude = np.linalg.norm(direction_vector)
+        if direction_magnitude > 0:
+            unit_vector = direction_vector / direction_magnitude
+
+            # Scale for visualization (arrow length relative to array size)
+            arrow_scale = np.ptp(pos1[:, 0]) * 0.4  # 40% of array width
+
+            # Draw arrow from mic position
+            ax_array.arrow(mic_pos[0], mic_pos[1],
+                          unit_vector[0] * arrow_scale,
+                          unit_vector[1] * arrow_scale,
+                          head_width=arrow_scale*0.15, head_length=arrow_scale*0.12,
+                          fc='red', ec='red', alpha=0.7,
+                          linewidth=1.5, zorder=2)
+
+    # Add microphone labels
+    for i, (x, y) in enumerate(pos1):
+        ax_array.annotate(f'{i+1}', (x, y), ha='center', va='center',
+                         fontsize=8, color='white', fontweight='bold', zorder=4)
+
+    # Add grid and centerlines
+    ax_array.axvline(0, color='black', linestyle='--', alpha=0.5, linewidth=1)
+    ax_array.axhline(0, color='black', linestyle='--', alpha=0.5, linewidth=1)
+    ax_array.grid(True, alpha=0.3)
+
+    # Set labels and title
+    ax_array.set_xlabel('X Position (m)', fontsize=12)
+    ax_array.set_ylabel('Y Position (m)', fontsize=12)
+    ax_array.set_title(f'Array Closeup: Unit Vectors to Source\n' +
+                      f'Calculated AoA: X={np.degrees(aoa_x_calculated):.2f}°, Y={np.degrees(aoa_y_calculated):.2f}°',
+                      fontsize=12, fontweight='bold')
+
+    ax_array.set_aspect('equal')
+    ax_array.legend(fontsize=10, loc='best')
+
+    # Adjust axis limits to show array clearly
+    array_margin = np.ptp(pos1[:, 0]) * 1.5
+    ax_array.set_xlim(pos1[:, 0].min() - array_margin, pos1[:, 0].max() + array_margin)
+    ax_array.set_ylim(pos1[:, 1].min() - array_margin, pos1[:, 1].max() + array_margin)
+
+    # RIGHT SUBPLOT: Overview showing both array and source
+    # Plot microphones (smaller)
+    ax_overview.scatter(pos1[:, 0], pos1[:, 1],
+                       s=100, c='blue', marker='o', edgecolors='black', linewidth=1.5,
+                       label='Microphone Array', zorder=3)
+
+    # Mark source position projection on x-y plane
+    ax_overview.scatter(source_pos[0], source_pos[1],
+                       s=400, c='green', marker='*', edgecolors='black',
+                       linewidth=2, label=f'Source @ ({source_pos[0]:.1f}, {source_pos[1]:.1f}, {source_pos[2]:.1f})m',
+                       zorder=3)
+
+    # Draw line from array center to source
+    array_center = np.mean(pos1, axis=0)
+    ax_overview.plot([array_center[0], source_pos[0]],
+                    [array_center[1], source_pos[1]],
+                    'g--', linewidth=2, alpha=0.5, label='Array to Source')
+
+    # Add grid and centerlines
+    ax_overview.axvline(0, color='black', linestyle='--', alpha=0.3, linewidth=1)
+    ax_overview.axhline(0, color='black', linestyle='--', alpha=0.3, linewidth=1)
+    ax_overview.grid(True, alpha=0.3)
+
+    # Set labels and title
+    ax_overview.set_xlabel('X Position (m)', fontsize=12)
+    ax_overview.set_ylabel('Y Position (m)', fontsize=12)
+    ax_overview.set_title(f'Overview: Array and Source Position\n' +
+                         f'Distance: {np.linalg.norm([source_pos[0]-array_center[0], source_pos[1]-array_center[1], source_pos[2]]):.1f}m',
+                         fontsize=12, fontweight='bold')
+
+    ax_overview.set_aspect('equal')
+    ax_overview.legend(fontsize=10, loc='best')
+
+    # Adjust axis limits to show both array and source
+    x_range = max(abs(source_pos[0]), abs(pos1[:, 0].max())) * 1.2
+    y_range = max(abs(source_pos[1]), abs(pos1[:, 1].max())) * 1.2
+    ax_overview.set_xlim(-x_range, x_range)
+    ax_overview.set_ylim(-y_range, y_range)
+
+    plt.tight_layout()
+    plt.savefig('Pictures/source_direction_vectors.png', dpi=150, bbox_inches='tight')
+    print("Saved source direction vectors plot to Pictures/source_direction_vectors.png")
+
     # Test far-field distance criterion
     print("\n" + "="*60)
     print("FAR-FIELD DISTANCE ANALYSIS")
