@@ -12,9 +12,9 @@ This is the Nyquist rule to avoid spatial aliasing.
 
 Each microphone uses the following to determine the **Angle of Arrival**:
 
-$$\delta t = \lambda \sin(\theta)/2c$$
+$$\Delta t = \lambda \sin(\theta)/2c$$
 
 Where:
-- $d$ is the distance between microphones
-- $k$ represents the position of the element in the array
-- $\theta$ is the angle of arrival
+- $\Delta t$ is the time delay between mic pairs
+- $\lambda/2$ represents the distance between mic pairs in the cardinal direction
+- $\theta$ is the angle of arrival 
