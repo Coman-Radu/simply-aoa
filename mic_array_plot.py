@@ -553,7 +553,75 @@ if __name__ == "__main__":
     print(f"  X-axis: {aoa_x_360:.2f} degrees")
     print(f"  Y-axis: {aoa_y_360:.2f} degrees")
 
-    print(f"\nTheoretical vs Calculated:")
+    # 3D Direction Vector from 2D angles (Triangulation)
+    print("\n" + "-"*70)
+    print("3D DIRECTION VECTOR FROM 2D ANGLES")
+    print("-"*70)
+
+    # We have two angles:
+    # - aoa_x_calculated: angle from z-axis in x-z plane (azimuth)
+    # - aoa_y_calculated: angle from z-axis in y-z plane (elevation)
+
+    # Build 3D unit vector from the two 2D angle measurements
+    # The source direction can be constructed as:
+    # x-component: projection onto x-axis from x-z plane angle
+    # y-component: projection onto y-axis from y-z plane angle
+    # z-component: derived to make unit vector
+
+    dir_x = np.sin(aoa_x_calculated)
+    dir_y = np.sin(aoa_y_calculated)
+
+    # For far-field planar wavefront assumption:
+    # sin²(θ_x) + sin²(θ_y) + cos²(θ_combined) = 1
+    # Solve for z-component
+    sin_sum_sq = dir_x**2 + dir_y**2
+
+    if sin_sum_sq <= 1.0:
+        dir_z = np.sqrt(1.0 - sin_sum_sq)
+    else:
+        # Edge case: angles inconsistent (shouldn't happen in far-field)
+        # Normalize to maintain unit vector
+        norm = np.sqrt(sin_sum_sq)
+        dir_x /= norm
+        dir_y /= norm
+        dir_z = 0.0
+        print("Warning: angle sum exceeds physical limit, normalizing...")
+
+    calculated_direction_vector = np.array([dir_x, dir_y, dir_z])
+
+    # Calculate theoretical 3D direction for comparison
+    theoretical_direction_vector = source_pos / np.linalg.norm(source_pos)
+
+    print(f"\nCalculated 3D unit vector:")
+    print(f"  Direction: [{calculated_direction_vector[0]:.4f}, {calculated_direction_vector[1]:.4f}, {calculated_direction_vector[2]:.4f}]")
+    print(f"  Magnitude: {np.linalg.norm(calculated_direction_vector):.4f}")
+
+    print(f"\nTheoretical 3D unit vector:")
+    print(f"  Direction: [{theoretical_direction_vector[0]:.4f}, {theoretical_direction_vector[1]:.4f}, {theoretical_direction_vector[2]:.4f}]")
+    print(f"  Magnitude: {np.linalg.norm(theoretical_direction_vector):.4f}")
+
+    # Calculate 3D angular error (angle between two vectors)
+    dot_product = np.dot(calculated_direction_vector, theoretical_direction_vector)
+    dot_product = np.clip(dot_product, -1.0, 1.0)  # Handle numerical precision
+    angular_error_3d = np.arccos(dot_product)
+
+    print(f"\n3D Angular Error: {np.degrees(angular_error_3d):.2f} degrees")
+    print(f"  (Angle between calculated and theoretical direction vectors)")
+
+    # Convert to spherical coordinates for intuition
+    # Azimuth φ (in x-y plane from +x axis)
+    azimuth_3d_calc = np.arctan2(calculated_direction_vector[1], calculated_direction_vector[0])
+    azimuth_3d_theo = np.arctan2(theoretical_direction_vector[1], theoretical_direction_vector[0])
+
+    # Polar angle θ (from +z axis)
+    polar_3d_calc = np.arccos(calculated_direction_vector[2])
+    polar_3d_theo = np.arccos(theoretical_direction_vector[2])
+
+    print(f"\nSpherical coordinates (for reference):")
+    print(f"  Calculated - Azimuth: {np.degrees(azimuth_3d_calc):.2f}°, Polar: {np.degrees(polar_3d_calc):.2f}°")
+    print(f"  Theoretical - Azimuth: {np.degrees(azimuth_3d_theo):.2f}°, Polar: {np.degrees(polar_3d_theo):.2f}°")
+
+    print(f"\nTheoretical vs Calculated (2D projections):")
     print(f"  X-axis: {np.degrees(theoretical_angle_x):.2f} deg (theory) vs {np.degrees(aoa_x_calculated):.2f} deg (calc)")
     print(f"  Y-axis: {np.degrees(theoretical_angle_y):.2f} deg (theory) vs {np.degrees(aoa_y_calculated):.2f} deg (calc)")
 
@@ -561,22 +629,26 @@ if __name__ == "__main__":
     print(f"  X-axis: {np.degrees(aoa_x_calculated - theoretical_angle_x):.2f} degrees")
     print(f"  Y-axis: {np.degrees(aoa_y_calculated - theoretical_angle_y):.2f} degrees")
 
-    # Plot unit vectors from each mic toward source
+    # Plot unit vectors from each mic toward source (3D)
     print("\nGenerating visualization of source direction vectors...")
-    fig_vectors, (ax_array, ax_overview) = plt.subplots(1, 2, figsize=(18, 8))
+    fig_vectors = plt.figure(figsize=(16, 8))
 
-    # LEFT SUBPLOT: Array closeup with unit vectors
-    # Plot microphones
-    ax_array.scatter(pos1[:, 0], pos1[:, 1],
+    # Create 2 subplots: 3D array closeup and 3D full view
+    ax_array = fig_vectors.add_subplot(121, projection='3d')
+    ax_3d = fig_vectors.add_subplot(122, projection='3d')
+
+    # LEFT SUBPLOT: Array closeup with unit vectors (3D)
+    # Plot microphones on x-y plane (z=0)
+    ax_array.scatter(pos1[:, 0], pos1[:, 1], np.zeros(len(pos1)),
                      s=200, c='blue', marker='o', edgecolors='black', linewidth=2,
-                     label='Microphones', zorder=3)
+                     label='Microphones', depthshade=True)
 
-    # Calculate unit vectors from each mic toward source
-    # Direction from mic to source (in x-y plane projection)
+    # Calculate unit vectors from each mic toward source (full 3D)
     for i, mic_pos in enumerate(pos1):
-        # Vector from mic to source (2D projection)
-        direction_vector = np.array([source_pos[0] - mic_pos[0],
-                                     source_pos[1] - mic_pos[1]])
+        mic_pos_3d = np.array([mic_pos[0], mic_pos[1], 0])
+
+        # Vector from mic to source (full 3D)
+        direction_vector = source_pos - mic_pos_3d
 
         # Normalize to unit vector
         direction_magnitude = np.linalg.norm(direction_vector)
@@ -584,83 +656,226 @@ if __name__ == "__main__":
             unit_vector = direction_vector / direction_magnitude
 
             # Scale for visualization (arrow length relative to array size)
-            arrow_scale = np.ptp(pos1[:, 0]) * 0.4  # 40% of array width
+            arrow_scale = np.ptp(pos1[:, 0]) * 0.8  # 80% of array width
 
-            # Draw arrow from mic position
-            ax_array.arrow(mic_pos[0], mic_pos[1],
-                          unit_vector[0] * arrow_scale,
-                          unit_vector[1] * arrow_scale,
-                          head_width=arrow_scale*0.15, head_length=arrow_scale*0.12,
-                          fc='red', ec='red', alpha=0.7,
-                          linewidth=1.5, zorder=2)
+            # Draw 3D arrow from mic position
+            ax_array.quiver(mic_pos[0], mic_pos[1], 0,
+                           unit_vector[0] * arrow_scale,
+                           unit_vector[1] * arrow_scale,
+                           unit_vector[2] * arrow_scale,
+                           color='red', alpha=0.7, arrow_length_ratio=0.2, linewidth=2)
 
     # Add microphone labels
     for i, (x, y) in enumerate(pos1):
-        ax_array.annotate(f'{i+1}', (x, y), ha='center', va='center',
-                         fontsize=8, color='white', fontweight='bold', zorder=4)
+        ax_array.text(x, y, 0, f'{i+1}', ha='center', va='center',
+                     fontsize=8, color='white', fontweight='bold', zorder=100,
+                     bbox=dict(boxstyle='circle', facecolor='blue', edgecolor='black', linewidth=1.5, pad=0.3))
 
-    # Add grid and centerlines
-    ax_array.axvline(0, color='black', linestyle='--', alpha=0.5, linewidth=1)
-    ax_array.axhline(0, color='black', linestyle='--', alpha=0.5, linewidth=1)
-    ax_array.grid(True, alpha=0.3)
+    # Draw array plane (x-y plane at z=0)
+    array_extent = np.ptp(pos1[:, 0]) * 1.3
+    xx, yy = np.meshgrid(np.linspace(pos1[:, 0].min() - array_extent*0.2, pos1[:, 0].max() + array_extent*0.2, 10),
+                         np.linspace(pos1[:, 1].min() - array_extent*0.2, pos1[:, 1].max() + array_extent*0.2, 10))
+    zz = np.zeros_like(xx)
+    ax_array.plot_surface(xx, yy, zz, alpha=0.15, color='cyan')
 
     # Set labels and title
-    ax_array.set_xlabel('X Position (m)', fontsize=12)
-    ax_array.set_ylabel('Y Position (m)', fontsize=12)
-    ax_array.set_title(f'Array Closeup: Unit Vectors to Source\n' +
-                      f'Calculated AoA: X={np.degrees(aoa_x_calculated):.2f}°, Y={np.degrees(aoa_y_calculated):.2f}°',
-                      fontsize=12, fontweight='bold')
+    ax_array.set_xlabel('X (m)', fontsize=10)
+    ax_array.set_ylabel('Y (m)', fontsize=10)
+    ax_array.set_zlabel('Z (m)', fontsize=10)
+    ax_array.set_title(f'3D Array Closeup: Direction Vectors\n' +
+                      f'AoA: X={np.degrees(aoa_x_calculated):.2f}°, Y={np.degrees(aoa_y_calculated):.2f}°',
+                      fontsize=11, fontweight='bold')
 
-    ax_array.set_aspect('equal')
-    ax_array.legend(fontsize=10, loc='best')
+    ax_array.legend(fontsize=9, loc='upper left')
 
-    # Adjust axis limits to show array clearly
-    array_margin = np.ptp(pos1[:, 0]) * 1.5
-    ax_array.set_xlim(pos1[:, 0].min() - array_margin, pos1[:, 0].max() + array_margin)
-    ax_array.set_ylim(pos1[:, 1].min() - array_margin, pos1[:, 1].max() + array_margin)
+    # Adjust axis limits for closeup view
+    array_margin = np.ptp(pos1[:, 0]) * 1.3
+    ax_array.set_xlim(pos1[:, 0].min() - array_margin*0.3, pos1[:, 0].max() + array_margin*0.3)
+    ax_array.set_ylim(pos1[:, 1].min() - array_margin*0.3, pos1[:, 1].max() + array_margin*0.3)
+    ax_array.set_zlim(0, array_margin)
 
-    # RIGHT SUBPLOT: Overview showing both array and source
-    # Plot microphones (smaller)
-    ax_overview.scatter(pos1[:, 0], pos1[:, 1],
-                       s=100, c='blue', marker='o', edgecolors='black', linewidth=1.5,
-                       label='Microphone Array', zorder=3)
+    # Set viewing angle
+    ax_array.view_init(elev=25, azim=45)
 
-    # Mark source position projection on x-y plane
-    ax_overview.scatter(source_pos[0], source_pos[1],
-                       s=400, c='green', marker='*', edgecolors='black',
-                       linewidth=2, label=f'Source @ ({source_pos[0]:.1f}, {source_pos[1]:.1f}, {source_pos[2]:.1f})m',
-                       zorder=3)
+    # RIGHT SUBPLOT: 3D full view
+    # Plot microphones in 3D (at z=0)
+    ax_3d.scatter(pos1[:, 0], pos1[:, 1], np.zeros(len(pos1)),
+                  s=100, c='blue', marker='o', edgecolors='black', linewidth=1.5,
+                  label='Microphone Array', depthshade=True)
+
+    # Plot source position
+    ax_3d.scatter(source_pos[0], source_pos[1], source_pos[2],
+                  s=400, c='green', marker='*', edgecolors='black', linewidth=2,
+                  label=f'Source', depthshade=True)
+
+    # Draw direction vectors from each mic to source
+    for i, mic_pos in enumerate(pos1):
+        mic_pos_3d = np.array([mic_pos[0], mic_pos[1], 0])
+        direction = source_pos - mic_pos_3d
+        direction_normalized = direction / np.linalg.norm(direction)
+
+        # Scale arrow for visibility
+        arrow_length = np.linalg.norm(source_pos) * 0.15
+
+        ax_3d.quiver(mic_pos[0], mic_pos[1], 0,
+                     direction_normalized[0] * arrow_length,
+                     direction_normalized[1] * arrow_length,
+                     direction_normalized[2] * arrow_length,
+                     color='red', alpha=0.6, arrow_length_ratio=0.15, linewidth=1.5)
+
+    # Draw array plane (z=0)
+    array_extent = np.ptp(pos1[:, 0]) * 1.5
+    xx, yy = np.meshgrid(np.linspace(-array_extent, array_extent, 10),
+                         np.linspace(-array_extent, array_extent, 10))
+    zz = np.zeros_like(xx)
+    ax_3d.plot_surface(xx, yy, zz, alpha=0.1, color='cyan', label='Array Plane')
 
     # Draw line from array center to source
     array_center = np.mean(pos1, axis=0)
-    ax_overview.plot([array_center[0], source_pos[0]],
-                    [array_center[1], source_pos[1]],
-                    'g--', linewidth=2, alpha=0.5, label='Array to Source')
+    array_center_3d = np.array([array_center[0], array_center[1], 0])
+    ax_3d.plot([array_center_3d[0], source_pos[0]],
+               [array_center_3d[1], source_pos[1]],
+               [array_center_3d[2], source_pos[2]],
+               'g--', linewidth=2, alpha=0.7, label='Center to Source')
 
-    # Add grid and centerlines
-    ax_overview.axvline(0, color='black', linestyle='--', alpha=0.3, linewidth=1)
-    ax_overview.axhline(0, color='black', linestyle='--', alpha=0.3, linewidth=1)
-    ax_overview.grid(True, alpha=0.3)
+    # Labels and title
+    ax_3d.set_xlabel('X Position (m)', fontsize=10)
+    ax_3d.set_ylabel('Y Position (m)', fontsize=10)
+    ax_3d.set_zlabel('Z Position (m)', fontsize=10)
+    ax_3d.set_title(f'3D View: Array and Source\n' +
+                    f'AoA: X={np.degrees(aoa_x_calculated):.1f}°, Y={np.degrees(aoa_y_calculated):.1f}°',
+                    fontsize=12, fontweight='bold')
+    ax_3d.legend(fontsize=8, loc='upper left')
 
-    # Set labels and title
-    ax_overview.set_xlabel('X Position (m)', fontsize=12)
-    ax_overview.set_ylabel('Y Position (m)', fontsize=12)
-    ax_overview.set_title(f'Overview: Array and Source Position\n' +
-                         f'Distance: {np.linalg.norm([source_pos[0]-array_center[0], source_pos[1]-array_center[1], source_pos[2]]):.1f}m',
-                         fontsize=12, fontweight='bold')
+    # Set equal aspect ratio for 3D
+    max_range = max(abs(source_pos[0]), abs(source_pos[1]), source_pos[2])
+    ax_3d.set_xlim([-max_range*0.6, max_range*0.6])
+    ax_3d.set_ylim([-max_range*0.6, max_range*0.6])
+    ax_3d.set_zlim([0, max_range*1.2])
 
-    ax_overview.set_aspect('equal')
-    ax_overview.legend(fontsize=10, loc='best')
-
-    # Adjust axis limits to show both array and source
-    x_range = max(abs(source_pos[0]), abs(pos1[:, 0].max())) * 1.2
-    y_range = max(abs(source_pos[1]), abs(pos1[:, 1].max())) * 1.2
-    ax_overview.set_xlim(-x_range, x_range)
-    ax_overview.set_ylim(-y_range, y_range)
+    # Adjust viewing angle
+    ax_3d.view_init(elev=20, azim=45)
 
     plt.tight_layout()
     plt.savefig('Pictures/source_direction_vectors.png', dpi=150, bbox_inches='tight')
     print("Saved source direction vectors plot to Pictures/source_direction_vectors.png")
+
+    # Realistic time-domain signal simulation
+    print("\n" + "="*60)
+    print("REALISTIC TIME-DOMAIN SIGNAL SIMULATION")
+    print("="*60)
+
+    # Signal parameters
+    signal_freq = config1.frequency  # Use array design frequency
+    sample_rate = signal_freq * 20  # Sample at 20x signal frequency (Nyquist + margin)
+    duration = 0.01  # 10ms signal duration
+    num_samples = int(duration * sample_rate)
+    t = np.arange(num_samples) / sample_rate
+
+    print(f"\nSignal parameters:")
+    print(f"  Frequency: {signal_freq} Hz")
+    print(f"  Sample rate: {sample_rate} Hz")
+    print(f"  Duration: {duration*1000:.1f} ms")
+    print(f"  Samples: {num_samples}")
+
+    # Generate source signal (sine wave)
+    source_signal = np.sin(2 * np.pi * signal_freq * t)
+
+    # Generate received signals at each microphone
+    mic_signals = np.zeros((len(pos1), num_samples))
+
+    for i, mic_pos in enumerate(pos1):
+        # Calculate distance from source to mic
+        distance = distances[i]
+
+        # Calculate time delay
+        delay_time = time_delays[i]
+        delay_samples = int(delay_time * sample_rate)
+
+        # Calculate attenuation (1/r spherical spreading)
+        attenuation = 1.0 / distance
+
+        # Generate delayed and attenuated signal
+        if delay_samples < num_samples:
+            # Shift signal by delay_samples
+            mic_signals[i, delay_samples:] = source_signal[:num_samples - delay_samples] * attenuation
+
+        # # Add noise (SNR in dB)
+        # snr_db = 20  # Signal-to-noise ratio
+        # signal_power = np.mean(mic_signals[i]**2)
+        # noise_power = signal_power / (10**(snr_db / 10))
+        # noise = np.sqrt(noise_power) * np.random.randn(num_samples)
+        # mic_signals[i] += noise
+
+    print(f"\nGenerated signals for {len(pos1)} microphones")
+
+    # Cross-correlate between microphones to find time delays
+    print("\nCross-correlating signals to measure time delays...")
+
+    # Calculate AoA from cross-correlation (row-wise for X-axis)
+    print("\nX-axis (azimuth) - analyzing first row:")
+    row_0_indices = [0, 1, 2, 3]
+
+    # Cross-correlate adjacent mics in the row
+    delta_t_measured_list = []
+    for j in range(len(row_0_indices) - 1):
+        mic_a = row_0_indices[j]
+        mic_b = row_0_indices[j + 1]
+
+        # Cross-correlate
+        correlation = np.correlate(mic_signals[mic_b], mic_signals[mic_a], mode='full')
+
+        # Find peak
+        peak_idx = np.argmax(correlation)
+
+        # Convert to time delay (relative to center of correlation)
+        delay_samples = peak_idx - (num_samples - 1)
+        delay_time = delay_samples / sample_rate
+
+        delta_t_measured_list.append(delay_time)
+
+        print(f"  Mic {mic_a+1} to Mic {mic_b+1}: {delay_time*1e6:.2f} us ({delay_samples} samples)")
+
+    # Average time delay per spacing
+    delta_t_x_corr = -np.mean(delta_t_measured_list)  # Negative for source direction
+    aoa_x_corr = apply_trig_angle(delta_t_x_corr, config1.wavelength, config1.speed_of_sound)
+
+    print(f"\nAverage delta_t per spacing (X): {delta_t_x_corr*1e6:.2f} us")
+    print(f"Calculated AoA (X-axis) from correlation: {np.degrees(aoa_x_corr):.2f} degrees")
+
+    # Calculate AoA from cross-correlation (column-wise for Y-axis)
+    print("\nY-axis (elevation) - analyzing first column:")
+    col_0_indices = [0, 4, 8, 12]
+
+    delta_t_measured_list_y = []
+    for j in range(len(col_0_indices) - 1):
+        mic_a = col_0_indices[j]
+        mic_b = col_0_indices[j + 1]
+
+        # Cross-correlate
+        correlation = np.correlate(mic_signals[mic_b], mic_signals[mic_a], mode='full')
+
+        # Find peak
+        peak_idx = np.argmax(correlation)
+
+        # Convert to time delay
+        delay_samples = peak_idx - (num_samples - 1)
+        delay_time = delay_samples / sample_rate
+
+        delta_t_measured_list_y.append(delay_time)
+
+        print(f"  Mic {mic_a+1} to Mic {mic_b+1}: {delay_time*1e6:.2f} us ({delay_samples} samples)")
+
+    # Average time delay per spacing
+    delta_t_y_corr = -np.mean(delta_t_measured_list_y)  # Negative for source direction
+    aoa_y_corr = apply_trig_angle(delta_t_y_corr, config1.wavelength, config1.speed_of_sound)
+
+    print(f"\nAverage delta_t per spacing (Y): {delta_t_y_corr*1e6:.2f} us")
+    print(f"Calculated AoA (Y-axis) from correlation: {np.degrees(aoa_y_corr):.2f} degrees")
+
+    print(f"\nComparison with theoretical:")
+    print(f"  X-axis: Theory={np.degrees(theoretical_angle_x):.2f}°, Correlation={np.degrees(aoa_x_corr):.2f}°, Error={np.degrees(aoa_x_corr - theoretical_angle_x):.2f}°")
+    print(f"  Y-axis: Theory={np.degrees(theoretical_angle_y):.2f}°, Correlation={np.degrees(aoa_y_corr):.2f}°, Error={np.degrees(aoa_y_corr - theoretical_angle_y):.2f}°")
 
     # Test far-field distance criterion
     print("\n" + "="*60)
