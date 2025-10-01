@@ -8,9 +8,11 @@ Microphone spacing is not a static value and needs to be determined using:
 
 $$\frac{\lambda}{2}$$
 
-This is the Nyquist rule to avoid spatial aliasing. Each microphone uses:
+This is the Nyquist rule to avoid spatial aliasing. 
 
-$$x[n] \exp(-2j\pi d k \sin(\theta))$$
+Each microphone uses the following to determine the **Angle of Arrival**:
+
+$$\delta t = \lambda \sin(\theta)/2c$$
 
 Where:
 - $d$ is the distance between microphones
