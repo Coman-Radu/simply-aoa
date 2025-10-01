@@ -18,3 +18,12 @@ Where:
 - $\Delta t$ is the time delay between mic pairs
 - $\lambda/2$ represents the distance between mic pairs in the cardinal direction
 - $\theta$ is the angle of arrival 
+
+
+
+## Do not run test_example.py at this time!!
+    The test uses a function that has been commented out of the time being. To see any details run 
+
+'''python mic_array_plot.py'''
+
+    and refer to the pictures in Pictures for plots generated.
