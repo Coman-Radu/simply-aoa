@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Audio and datasets: third-party recordings are not redistributed here
+*.wav
+audio_dataset/
+
+# Archives
+*.zip
+
+# Editor / OS / tool scratch files
+.DS_Store
+.vscode/
+.idea/
+.claude/
+tmpclaude-*

@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from dataclasses import dataclass
 import json
+from scipy.io import wavfile
+from scipy.signal import resample
 
 @dataclass
 class MicArrayConfig:
@@ -765,21 +767,34 @@ if __name__ == "__main__":
     print("REALISTIC TIME-DOMAIN SIGNAL SIMULATION")
     print("="*60)
 
-    # Signal parameters
-    signal_freq = config1.frequency  # Use array design frequency
-    sample_rate = signal_freq * 20  # Sample at 20x signal frequency (Nyquist + margin)
-    duration = 0.01  # 10ms signal duration
+    # Load wav file as source signal
+    wav_sample_rate, wav_data = wavfile.read('Binary_Drone_Audio_yes_drone_B_S2_D1_067-bebop_000_.wav')
+
+    # Convert to float if necessary
+    if wav_data.dtype == np.int16:
+        wav_data = wav_data.astype(np.float32) / 32768.0
+    elif wav_data.dtype == np.int32:
+        wav_data = wav_data.astype(np.float32) / 2147483648.0
+
+    # If stereo, take first channel
+    if wav_data.ndim > 1:
+        wav_data = wav_data[:, 0]
+
+    # Set signal parameters based on wav file
+    signal_freq = config1.frequency  # Use array design frequency for calculations
+    sample_rate = wav_sample_rate
+
+    # Use a portion of the wav file (or all if short)
+    duration = min(len(wav_data) / wav_sample_rate, 0.01)  # Max 10ms or full file
     num_samples = int(duration * sample_rate)
+    source_signal = wav_data[:num_samples]
     t = np.arange(num_samples) / sample_rate
 
     print(f"\nSignal parameters:")
-    print(f"  Frequency: {signal_freq} Hz")
+    print(f"  Wav file: drone_monotone_3kHz.wav")
     print(f"  Sample rate: {sample_rate} Hz")
     print(f"  Duration: {duration*1000:.1f} ms")
     print(f"  Samples: {num_samples}")
-
-    # Generate source signal (sine wave)
-    source_signal = np.sin(2 * np.pi * signal_freq * t)
 
     # Generate received signals at each microphone
     mic_signals = np.zeros((len(pos1), num_samples))
@@ -876,6 +891,121 @@ if __name__ == "__main__":
     print(f"\nComparison with theoretical:")
     print(f"  X-axis: Theory={np.degrees(theoretical_angle_x):.2f}°, Correlation={np.degrees(aoa_x_corr):.2f}°, Error={np.degrees(aoa_x_corr - theoretical_angle_x):.2f}°")
     print(f"  Y-axis: Theory={np.degrees(theoretical_angle_y):.2f}°, Correlation={np.degrees(aoa_y_corr):.2f}°, Error={np.degrees(aoa_y_corr - theoretical_angle_y):.2f}°")
+
+    # Hilbert transform-based TDOA estimation
+    print("\n" + "="*60)
+    print("HILBERT TRANSFORM-BASED TDOA ESTIMATION")
+    print("="*60)
+
+    from scipy.signal import hilbert
+
+    # Compute analytic signals for all microphones
+    analytic_signals = np.zeros_like(mic_signals, dtype=complex)
+    for i in range(len(pos1)):
+        analytic_signals[i] = hilbert(mic_signals[i])
+
+    # Extract instantaneous phase
+    instantaneous_phases = np.angle(analytic_signals)
+
+    # Method 1: Phase difference at signal peak
+    print("\nMethod 1: Phase difference at peak envelope")
+
+    # Find peak in envelope for first mic as reference
+    envelope_ref = np.abs(analytic_signals[0])
+    peak_idx = np.argmax(envelope_ref)
+
+    print(f"Reference peak at sample {peak_idx} (time = {peak_idx/sample_rate*1e6:.2f} us)")
+
+    # X-axis phase-based TDOA
+    print("\nX-axis (azimuth) - phase differences:")
+    phase_delays_x = []
+    for j in range(len(row_0_indices) - 1):
+        mic_a = row_0_indices[j]
+        mic_b = row_0_indices[j + 1]
+
+        # Phase difference at peak
+        phase_diff = instantaneous_phases[mic_b, peak_idx] - instantaneous_phases[mic_a, peak_idx]
+
+        # Unwrap phase to [-pi, pi]
+        phase_diff = np.arctan2(np.sin(phase_diff), np.cos(phase_diff))
+
+        # Convert phase difference to time delay
+        # For narrowband signal: dt = phase_diff / (2*pi*f)
+        delay_time = phase_diff / (2 * np.pi * signal_freq)
+
+        phase_delays_x.append(delay_time)
+        print(f"  Mic {mic_a+1} to Mic {mic_b+1}: {delay_time*1e6:.2f} us (phase diff: {np.degrees(phase_diff):.2f}°)")
+
+    delta_t_x_hilbert = -np.mean(phase_delays_x)
+    aoa_x_hilbert = apply_trig_angle(delta_t_x_hilbert, config1.wavelength, config1.speed_of_sound)
+
+    print(f"\nAverage delta_t per spacing (X): {delta_t_x_hilbert*1e6:.2f} us")
+    print(f"Calculated AoA (X-axis) from Hilbert: {np.degrees(aoa_x_hilbert):.2f} degrees")
+
+    # Y-axis phase-based TDOA
+    print("\nY-axis (elevation) - phase differences:")
+    phase_delays_y = []
+    for j in range(len(col_0_indices) - 1):
+        mic_a = col_0_indices[j]
+        mic_b = col_0_indices[j + 1]
+
+        phase_diff = instantaneous_phases[mic_b, peak_idx] - instantaneous_phases[mic_a, peak_idx]
+        phase_diff = np.arctan2(np.sin(phase_diff), np.cos(phase_diff))
+        delay_time = phase_diff / (2 * np.pi * signal_freq)
+
+        phase_delays_y.append(delay_time)
+        print(f"  Mic {mic_a+1} to Mic {mic_b+1}: {delay_time*1e6:.2f} us (phase diff: {np.degrees(phase_diff):.2f}°)")
+
+    delta_t_y_hilbert = -np.mean(phase_delays_y)
+    aoa_y_hilbert = apply_trig_angle(delta_t_y_hilbert, config1.wavelength, config1.speed_of_sound)
+
+    print(f"\nAverage delta_t per spacing (Y): {delta_t_y_hilbert*1e6:.2f} us")
+    print(f"Calculated AoA (Y-axis) from Hilbert: {np.degrees(aoa_y_hilbert):.2f} degrees")
+
+    # Method 2: Envelope cross-correlation
+    print("\n\nMethod 2: Envelope cross-correlation")
+    print("\nX-axis (azimuth) - envelope correlation:")
+
+    envelope_delays_x = []
+    for j in range(len(row_0_indices) - 1):
+        mic_a = row_0_indices[j]
+        mic_b = row_0_indices[j + 1]
+
+        # Extract envelopes
+        envelope_a = np.abs(analytic_signals[mic_a])
+        envelope_b = np.abs(analytic_signals[mic_b])
+
+        # Cross-correlate envelopes
+        correlation = np.correlate(envelope_b, envelope_a, mode='full')
+        peak_idx_corr = np.argmax(correlation)
+
+        delay_samples = peak_idx_corr - (num_samples - 1)
+        delay_time = delay_samples / sample_rate
+
+        envelope_delays_x.append(delay_time)
+        print(f"  Mic {mic_a+1} to Mic {mic_b+1}: {delay_time*1e6:.2f} us ({delay_samples} samples)")
+
+    delta_t_x_envelope = -np.mean(envelope_delays_x)
+    aoa_x_envelope = apply_trig_angle(delta_t_x_envelope, config1.wavelength, config1.speed_of_sound)
+
+    print(f"\nAverage delta_t per spacing (X): {delta_t_x_envelope*1e6:.2f} us")
+    print(f"Calculated AoA (X-axis) from envelope correlation: {np.degrees(aoa_x_envelope):.2f} degrees")
+
+    # Comparison of all methods
+    print("\n" + "="*60)
+    print("COMPARISON OF TDOA METHODS")
+    print("="*60)
+
+    print(f"\nX-axis (Azimuth):")
+    print(f"  Theoretical:            {np.degrees(theoretical_angle_x):.2f}°")
+    print(f"  Cross-correlation:      {np.degrees(aoa_x_corr):.2f}° (error: {np.degrees(aoa_x_corr - theoretical_angle_x):.2f}°)")
+    print(f"  Hilbert phase:          {np.degrees(aoa_x_hilbert):.2f}° (error: {np.degrees(aoa_x_hilbert - theoretical_angle_x):.2f}°)")
+    print(f"  Envelope correlation:   {np.degrees(aoa_x_envelope):.2f}° (error: {np.degrees(aoa_x_envelope - theoretical_angle_x):.2f}°)")
+
+    print(f"\nY-axis (Elevation):")
+    print(f"  Theoretical:            {np.degrees(theoretical_angle_y):.2f}°")
+    print(f"  Cross-correlation:      {np.degrees(aoa_y_corr):.2f}° (error: {np.degrees(aoa_y_corr - theoretical_angle_y):.2f}°)")
+    print(f"  Hilbert phase:          {np.degrees(aoa_y_hilbert):.2f}° (error: {np.degrees(aoa_y_hilbert - theoretical_angle_y):.2f}°)")
 
     # Test far-field distance criterion
     print("\n" + "="*60)
